@@ -106,8 +106,9 @@ function buildPrompt() {
   let promptBody = "";
   if (category === "people") {
     const adult = hasAny(desc, [/成年/, /岁/]) ? "" : "一位明确成年的";
-    const ethnicity = hasAny(desc, [/亚洲/, /东亚/]) ? "" : "亚洲";
-    const subject = adult + ethnicity + "女性";
+    const ethnicity = hasAny(desc, [/亚洲/, /东亚/]) ? "亚洲" : "亚洲";
+    const ageStyle = /年轻/.test(desc) ? "年轻" : "";
+    const subject = adult + ageStyle + ethnicity + "女性";
     const hasHat = /草帽|遮阳帽|帽子|帽檐/.test(desc);
     const appearance = [
       hasHat ? "头戴一顶浅色编织遮阳草帽" : "头发与配饰保持简洁自然",
