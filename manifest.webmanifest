@@ -1,0 +1,17 @@
+{
+  "name": "Prompt Studio 2.0",
+  "short_name": "Prompt Studio",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#f6f5f1",
+  "description": "专业 AI 生图提示词工作台",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

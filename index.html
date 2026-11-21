@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5f1">
+  <meta name="description" content="Prompt Studio 2.0 — 专业 AI 生图提示词工作台">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>Prompt Studio 2.0</title>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Prompt Studio 首页">
+      <span class="brand-mark">✳</span>
+      <span><strong>Prompt Studio</strong><small>2.0 · 创作工作台</small></span>
+    </a>
+    <span class="local-pill"><i></i> 本地模式</span>
+  </header>
+
+  <main class="shell">
+    <section class="intro">
+      <p class="eyebrow">IMAGE PROMPT WORKSPACE</p>
+      <h1>把脑海里的画面，<br class="mobile-break">变成专业提示词。</h1>
+      <p class="sub">用自然语言描述创意，直接生成可用于 AI 生图工具的完整提示词。</p>
+    </section>
+
+    <nav class="tabs" aria-label="主导航">
+      <button class="tab active" data-tab="create">创作</button>
+      <button class="tab" data-tab="history">历史记录 <span id="history-count">0</span></button>
+      <button class="tab" data-tab="settings">说明</button>
+    </nav>
+
+    <section id="create-view" class="view">
+      <div class="workspace-grid">
+        <div class="panel editor-panel">
+          <div class="section-heading">
+            <div><span class="step">01</span><h2>描述你的画面</h2></div>
+            <span class="muted tiny">不需要专业术语</span>
+          </div>
+          <label class="sr-only" for="description">画面描述</label>
+          <textarea id="description" rows="6" placeholder="例如：一位年轻成年女性在海边度假，穿白色连体泳装，站在沙滩边，阳光明媚，照片要有真实电影质感……"></textarea>
+          <div class="textarea-foot"><span>建议包含主体、动作、服装、场景和氛围</span><span id="char-count">0 字</span></div>
+
+          <div class="divider"></div>
+          <div class="section-heading"><div><span class="step">02</span><h2>画面参数</h2></div></div>
+          <div class="form-grid">
+            <label>图片类型
+              <select id="kind">
+                <option value="人物写真">人物写真</option>
+                <option value="情侣/多人写真">情侣/多人写真</option>
+                <option value="风景摄影">风景摄影</option>
+                <option value="产品摄影">产品摄影</option>
+                <option value="建筑摄影">建筑摄影</option>
+                <option value="动漫插画">动漫插画</option>
+              </select>
+            </label>
+            <label>视觉风格
+              <select id="style">
+                <option>真实摄影</option><option>电影质感</option><option>时尚写真</option>
+                <option>商业广告</option><option>纪实摄影</option><option>动漫插画</option>
+              </select>
+            </label>
+            <label>画幅比例
+              <select id="ratio"><option>3:4</option><option>2:3</option><option>1:1</option><option>16:9</option><option>9:16</option></select>
+            </label>
+            <label>拍摄机位
+              <select id="camera"><option>自然平视</option><option>低机位仰拍</option><option>高机位俯拍</option><option>侧面视角</option><option>主观视角</option></select>
+            </label>
+            <label>光线方案
+              <select id="lighting"><option>自然光</option><option>柔和人像光</option><option>电影感侧逆光</option><option>商业棚拍光</option><option>黄昏暖光</option><option>夜景环境光</option></select>
+            </label>
+            <label>提示词语言
+              <select id="language"><option value="中文">中文</option><option value="英文">英文</option></select>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <div><strong>专业详细模式</strong><small>补全摄影参数、空间关系、材质与负面约束</small></div>
+            <label class="switch"><input type="checkbox" id="detailed" checked><span></span></label>
+          </div>
+          <div class="actions">
+            <button class="button primary" id="generate">✦ 生成完整提示词</button>
+            <button class="button secondary" id="clear">清空</button>
+          </div>
+          <p class="notice">当前为免费本地规则模式，无需 API Key。它不是大模型语义推理，复杂创意建议使用后续 AI 增强接口。</p>
+        </div>
+
+        <aside class="panel guide-panel">
+          <p class="eyebrow">PROMPT GUIDE</p>
+          <h3>好的提示词，不只是形容词堆砌。</h3>
+          <ul class="guide-list">
+            <li><span>01</span><div><b>主体细节</b><small>外观、服装、材质、表情</small></div></li>
+            <li><span>02</span><div><b>动作结构</b><small>姿势、重心、肢体空间关系</small></div></li>
+            <li><span>03</span><div><b>摄影语言</b><small>机位、焦段、距离、景别、构图</small></div></li>
+            <li><span>04</span><div><b>光线环境</b><small>光源方向、明暗层次、环境反射</small></div></li>
+            <li><span>05</span><div><b>画面约束</b><small>一致性、细节质量、负面提示词</small></div></li>
+          </ul>
+          <div class="guide-tip"><b>设计原则</b><p>优先保留你的原始创意。未指定的细节只做合理补全，不擅自添加抢戏元素。</p></div>
+        </aside>
+      </div>
+      <section id="result-panel" class="panel result-panel hidden">
+        <div class="result-head">
+          <div><span class="step">03</span><h2>你的最终提示词</h2><p class="muted tiny">可直接复制到常用 AI 生图工具</p></div>
+          <span class="ready">已生成</span>
+        </div>
+        <div id="result" class="result-text" aria-live="polite"></div>
+        <div class="result-actions">
+          <button class="button primary" id="copy">复制完整提示词</button>
+          <button class="button secondary" id="save">保存到历史</button>
+          <button class="button secondary" id="regenerate">重新生成</button>
+        </div>
+      </section>
+    </section>
+
+    <section id="history-view" class="view hidden">
+      <div class="page-heading"><div><p class="eyebrow">YOUR WORK</p><h2>历史记录</h2></div><button class="button secondary" id="clear-history">清空记录</button></div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+    <section id="settings-view" class="view hidden">
+      <div class="panel settings-panel">
+        <p class="eyebrow">ABOUT THIS VERSION</p><h2>当前版本说明</h2>
+        <div class="info-block"><b>免费本地模式</b><p>提示词在浏览器中生成，记录保存在当前设备的本地存储中，不需要注册或 API Key。不同设备之间不会自动同步。</p></div>
+        <div class="info-block"><b>AI 增强模式（后续接入）</b><p>需要配置安全的服务端 API 代理。正式上线时不能把模型 API Key 写在网页前端。模型供应商和费用需由站点运营者自行选择。</p></div>
+        <div class="info-block"><b>安装到手机</b><p>网站部署到 HTTPS 域名后，使用手机浏览器菜单中的“添加到主屏幕”即可。当前源码已包含 PWA 基础文件。</p></div>
+        <div class="info-block"><b>隐私</b><p>本地版本不会把输入内容发送到服务器。清除浏览器站点数据会同时清除本地历史记录。</p></div>
+      </div>
+    </section>
+  </main>
+  <footer><span>Prompt Studio 2.0</span><span>Made for thoughtful image creation.</span></footer>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
