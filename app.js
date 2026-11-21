@@ -65,10 +65,17 @@ function getCategory(kind) {
 }
 function unique(items) { return [...new Set(items)]; }
 
-function buildPrompt() {
-  const desc = $("description").value.trim();
-  if (!desc) { toast("先描述你想生成的画面"); $("description").focus(); return; }
+function extractCoreDescription(raw) {
+  const match = raw.match(/【主题与核心创意】\s*([\s\S]*?)(?=\n【|$)/);
+  if (match) return match[1].trim();
+  return raw.replace(/^#.*$/gm, "").trim();
+}
+function hasAny(text, patterns) { return patterns.some(pattern => pattern.test(text)); }
 
+function buildPrompt() {
+  const raw = $("description").value.trim();
+  if (!raw) { toast("先描述你想生成的画面"); $("description").focus(); return; }
+  const desc = extractCoreDescription(raw) || raw;
   const kind = $("kind").value;
   const style = $("style").value;
   const ratio = $("ratio").value;
@@ -77,87 +84,87 @@ function buildPrompt() {
   const detailed = $("detailed").checked;
   const scene = detectScene(desc);
   const category = getCategory(kind);
-  const cameraMap = {
-    "自然平视": "采用自然平视机位，保持接近人眼观察的透视关系。",
-    "低机位仰拍": "相机置于主体较低位置向上拍摄，明确仰拍角度与主体透视关系，避免夸张拉伸。",
-    "高机位俯拍": "相机置于主体上方俯拍，交代主体与地面及环境的空间关系，避免头身比例异常。",
-    "侧面视角": "从主体侧前方取景，呈现轮廓、动作方向和环境纵深。",
-    "主观视角": "采用具有明确观看者位置的主观视角，保持前景与主体之间自然的空间关系。"
-  };
-  const lightMap = {
-    "自然光": "使用符合场景的自然光，明确光线方向、软硬程度、明暗过渡与环境反射光。",
-    "柔和人像光": "采用柔和人像光，控制面部阴影、皮肤高光和主体轮廓，保留自然立体感。",
-    "电影感侧逆光": "采用侧逆光塑造主体轮廓，提供适度正面补光，控制高光与暗部细节。",
-    "商业棚拍光": "使用有控制的商业棚拍布光，准确呈现主体形态、颜色与材质。",
-    "黄昏暖光": "使用低角度黄昏暖光，形成温暖的侧向照明与柔和长阴影。",
-    "夜景环境光": "以场景中的实际光源作为主要照明，保留夜景氛围和可信的明暗层次。"
-  };
-  const lens = {
-    people: "人物写真通常使用 50mm 或 85mm 等效焦段；需要更多环境信息时可考虑 35mm。",
-    group: "多人画面可考虑 35–50mm 等效焦段，保证人物之间的空间关系和边缘人物比例自然。",
-    landscape: "根据景观范围选择 24–35mm 等效焦段；避免前景过度放大或地平线变形。",
-    product: "产品摄影可使用 50–100mm 等效焦段，控制透视并准确呈现产品形态。",
-    architecture: "建筑摄影可使用 24–35mm 等效焦段，保持垂直线和空间比例自然。",
-    illustration: "根据画面风格选择合适视角，优先保证主体结构清楚、构图稳定。"
-  }[category];
 
-  let subjectSection = "";
-  if (category === "people" || category === "group") {
-    subjectSection = detailed
-      ? "【人物外观与主体细节】\n对用户明确指定的年龄、外貌、发型、体型、服装和身份特征逐项保留。未指定时，只补充与场景相符且不过度具体的外观细节；服装描述关注款式、版型、面料、织纹、褶皱和受光表现。人物应明确为成年人。"
-      : "【人物外观与主体细节】\n突出人物已指定的外观、服装和整体气质；只对缺失信息作克制、合理的补全，不擅自改变人物设定。";
-  } else if (category === "product") {
-    subjectSection = "【产品形态与材质】\n保留产品原有设计，描述可见的外形轮廓、结构部件、比例、表面工艺、材质反射和摆放方式；不凭空添加品牌标识或不存在的零件。";
-  } else if (category === "architecture") {
-    subjectSection = "【建筑结构与材质】\n描述建筑体量、立面节奏、门窗结构、材质肌理、空间尺度和周边环境；保持结构连续、比例可信，不擅自改变建筑设计。";
+  const cameraText = {
+    "自然平视": "相机与人物视线高度接近，以自然平视角度拍摄",
+    "低机位仰拍": "相机略低于主体视线，轻微向上拍摄，避免夸张透视",
+    "高机位俯拍": "相机位于主体上方，以克制的俯拍角度交代人物与环境",
+    "侧面视角": "从主体侧前方拍摄，呈现自然轮廓与环境纵深",
+    "主观视角": "采用自然的主观视角，保持前景与主体之间的真实距离"
+  }[camera] || "采用自然、稳定的观察视角";
+  const lightText = {
+    "自然光": "以自然日光作为主光，保留柔和阴影和真实环境反射光",
+    "柔和人像光": "使用柔和、均匀的人像光，保留面部自然立体感",
+    "电影感侧逆光": "使用侧逆光勾勒主体轮廓，并以微弱正面补光保留细节",
+    "商业棚拍光": "使用受控棚拍光，准确呈现主体形态与材质",
+    "黄昏暖光": "以低角度暖色夕阳照亮主体，形成柔和的长阴影",
+    "夜景环境光": "以场景中真实存在的灯光照明，保留夜间明暗层次"
+  }[lighting] || "采用符合场景的自然光线";
+  const lensByCategory = { people: "50mm 等效焦段", group: "35mm 等效焦段", landscape: "28mm 等效焦段", product: "85mm 等效焦段", architecture: "28mm 等效焦段", illustration: "自然透视视角" };
+  const lens = lensByCategory[category] || "50mm 等效焦段";
+
+  let promptBody = "";
+  if (category === "people") {
+    const adult = hasAny(desc, [/成年/, /岁/]) ? "" : "一位明确成年的";
+    const ethnicity = hasAny(desc, [/亚洲/, /东亚/]) ? "" : "亚洲";
+    const subject = adult + ethnicity + "女性";
+    const hasHat = /草帽|遮阳帽|帽子|帽檐/.test(desc);
+    const appearance = [
+      hasHat ? "头戴一顶浅色编织遮阳草帽" : "头发与配饰保持简洁自然",
+      /长发/.test(desc) ? "长发自然垂落" : "发丝自然蓬松",
+      /连衣裙|裙子|裙装/.test(desc) ? "穿着轻盈自然的连衣裙" : "穿着简洁得体、适合户外写真的浅色夏日连衣裙"
+    ].join("，");
+    const pose = [
+      /双手|两只手/.test(desc) && hasHat ? "双手轻轻扶住草帽两侧帽檐" : /双手/.test(desc) ? "双手保持用户指定的动作" : "双臂姿态自然放松",
+      /闭着眼|闭眼/.test(desc) ? "双眼轻轻闭合" : /看向镜头/.test(desc) ? "目光自然看向镜头" : "视线方向自然",
+      /微微抬头|抬头/.test(desc) ? "下巴微微抬起" : "",
+      /微笑|微微笑|笑容/.test(desc) ? "面带轻松、自然的微笑" : "表情放松自然"
+    ].filter(Boolean).join("，");
+    let environment = "";
+    if (scene.id === "flower") {
+      environment = "她置身于盛放的花海之中，近处几朵花在画面下缘形成轻微虚化的前景，中景是色彩丰富、疏密自然的花丛，远处花田向地平线延伸，与开阔的蔚蓝天空相接。花朵大小真实，颜色自然错落，不出现机械重复的图案。";
+      if (/微风|风吹|风/.test(desc)) environment += "微风轻轻吹动少量发丝、裙摆和花枝，动态方向一致，不遮挡面部。";
+      if (/阳光|晴天|明媚/.test(desc)) environment += "明亮的阳光从侧前方照来，在帽檐、发丝和花瓣边缘形成柔和高光，面部仍保留清晰细节。";
+    } else if (scene.id === "beach") {
+      environment = "背景呈现开阔的海岸与自然延伸的海平线，前景、中景和远景层次清楚，水面反光与人物受光方向一致。";
+    } else if (scene.id === "indoor") {
+      environment = "室内陈设简洁克制，家具、墙面和窗户形成清晰的空间层次，窗边自然光柔和地照亮人物。";
+    } else if (scene.id === "studio") {
+      environment = "背景干净简洁，人物与背景保持适当距离，光线柔和且阴影方向统一。";
+    } else {
+      environment = "背景元素与人物主题一致，前景、中景和远景层次自然，空间尺度可信，不加入无关装饰。";
+    }
+    promptBody = subject + " " + appearance + "。" + pose + "。" + environment;
+    if (detailed) promptBody += "人物身体结构自然，肩部、手臂与手指动作协调，双脚支撑稳定；服装面料轻盈，褶皱与光线变化真实。";
+  } else if (category === "group") {
+    promptBody = desc + "。清楚呈现每个人物的外观、动作和相互关系，人物之间保留合理距离，手臂与身体不交叉穿插，所有人物比例自然且完整。" + scene.detail;
   } else if (category === "landscape") {
-    subjectSection = "【自然环境与空间】\n根据描述呈现地貌、水体、植被、天空和天气特征；建立前景、中景、远景层次，保持自然尺度与地理关系可信。";
+    promptBody = desc + "。画面以明确的前景、中景和远景建立空间纵深，地貌、水体、植被与天空保持真实尺度，光线和天气表现统一。";
+  } else if (category === "product") {
+    promptBody = desc + "。完整呈现产品轮廓、关键结构和真实比例，表面材质、纹理、反射与接触阴影准确，背景简洁且不干扰主体。";
+  } else if (category === "architecture") {
+    promptBody = desc + "。准确呈现建筑体量、立面节奏、门窗比例和表面材质，保持垂直线稳定、透视关系正确，并通过前景与周边环境体现建筑尺度。";
   } else {
-    subjectSection = "【角色与画面细节】\n保留角色设计和指定视觉元素，明确造型轮廓、服饰特征、动作、线条语言、色彩体系与画面层次，保持风格统一。";
+    promptBody = desc + "。保留角色或主体的核心设计，明确轮廓、动作、色彩关系与空间层次，整体视觉风格统一，结构清晰。";
   }
-
-  const poseSection = (category === "people" || category === "group")
-    ? (detailed
-      ? "【姿势与肢体控制】\n保留用户指定的动作和视线方向；进一步明确身体朝向、重心落点、肩胯关系、手臂位置、手指动作和腿部支撑。多人画面需明确人物之间的距离、互动方向和遮挡关系。动作符合人体结构，避免肢体穿插。"
-      : "【姿势与肢体控制】\n准确呈现用户指定的动作、表情和视线；姿势自然舒展，重心与肢体动作符合人体结构。")
-    : "";
-
-  const sceneSection = detailed
-    ? `【场景与环境｜${scene.name}】\n${scene.detail} 场景中各元素应有明确的前后关系、合理尺度和自然接触阴影；背景服务于主体，不添加抢夺注意力的无关元素。`
-    : `【场景与环境】\n${scene.detail}`;
-
-  const framingSection = detailed
-    ? `【摄影机位与构图】\n画幅比例：${ratio}。摄影机位：${camera}。${cameraMap[camera]} ${lens} 根据主体选择合适的拍摄距离与景别，明确主体位置、留白、背景占比、透视关系和边缘安全空间。`
-    : `【构图】\n画幅比例：${ratio}。机位：${camera}。${cameraMap[camera]} 主体清晰突出，构图平衡，重要元素完整呈现。`;
-
-  const visualSection = detailed
-    ? `【风格、光线与画面质感】\n整体风格：${style}。${lightMap[lighting]} 色彩关系自然统一，保留高光、阴影与中间调层次；准确呈现画面中实际存在的皮肤、织物、金属、玻璃、木材或自然材质。\n【画面质量与一致性】\n主体清晰，结构准确，透视合理，光照方向统一，空间层次明确；细节丰富但不过度锐化，避免塑料感和不真实滤镜。`
-    : `【风格与光线】\n整体风格：${style}。${lightMap[lighting]} 画面色彩协调，主体与环境融合自然，保留真实材质和清晰的视觉重点。`;
 
   const negative = unique([
     ...NEGATIVES[category],
-    ...(scene.id === "beach" ? ["水面与沙滩边界错误", "海平面倾斜", "浪花形态重复"] : []),
-    ...(scene.id === "flower" ? ["花朵机械重复", "花枝穿过人物身体", "花瓣粘连"] : []),
+    ...(scene.id === "beach" ? ["海平面倾斜", "水面与沙滩边界错误", "浪花机械重复"] : []),
+    ...(scene.id === "flower" ? ["花朵机械重复", "花枝穿过人物身体", "花瓣粘连", "花海遮挡人物面部"] : []),
     ...(scene.id === "indoor" ? ["家具结构扭曲", "门窗透视错误", "物体悬浮"] : []),
     ...(scene.id === "night" ? ["无来源强光", "夜景过度提亮", "霓虹文字乱码"] : []),
-    ...(scene.id === "architecture" ? ["重复门窗", "立面节奏混乱"] : [])
+    ...(category === "architecture" ? ["重复门窗", "立面节奏混乱", "建筑垂直线倾斜"] : [])
   ]);
-
   const sections = [
-    `# ${desc.split(/[，。；,.;]/)[0].slice(0, 26)} · ${kind}`,
-    `【主题与核心创意】\n${desc}`,
-    subjectSection,
-    poseSection,
-    sceneSection,
-    framingSection,
-    visualSection,
-    `【负面提示词】\n${negative.join("，")}。`,
-    "【最终画面要求】\n严格保留用户原始主题、主体和指定元素。所有补充细节必须服务于核心创意；遇到用户未指定的信息应合理克制，不得与原始描述冲突。输出完整、统一、可直接用于图像生成的画面描述。"
+    "# " + desc.split(/[，。；,.;]/)[0].slice(0, 26) + " · " + kind,
+    "【画面描述】\n" + promptBody,
+    "【摄影与构图】\n" + ratio + " 画幅，" + cameraText + "，" + lens + "，" + style + "。" + lightText + "。主体清晰突出，构图稳定，保留自然景深与环境层次。",
+    detailed ? "【细节控制】\n真实呈现皮肤、织物与环境材质；人物结构、物体比例和透视准确，细节清楚但不过度锐化，避免塑料质感。" : "",
+    "【负面提示词】\n" + negative.join("，") + "。"
   ].filter(Boolean);
   currentPrompt = sections.join("\n\n");
-  if ($("language").value === "英文") {
-    currentPrompt = toEnglishPrompt(currentPrompt, desc);
-  }
+  if ($("language").value === "英文") currentPrompt = toEnglishPrompt(currentPrompt, desc);
   $("result").textContent = currentPrompt;
   $("result-panel").classList.remove("hidden");
   $("result-panel").scrollIntoView({ behavior: "smooth", block: "start" });
