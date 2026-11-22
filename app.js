@@ -107,11 +107,17 @@ function getCategory(kind) {
   if (kind === "建筑摄影") return "architecture";
   return "illustration";
 }
-function detectSubject(text, category) {
+function detectSubject(text, category, existingText = text) {
   if (category === "people") {
-    const age = hasAny(text, [/成年/, /\d{1,2}\s*岁/, /年轻/]) ? (/\d{1,2}\s*岁/.test(text) ? text.match(/\d{1,2}\s*岁/)[0] : (/年轻/.test(text) ? "年轻" : "成年")) : "";
-    const identity = hasAny(text, [/亚洲|东亚/]) ? "亚洲" : hasAny(text, [/欧洲/]) ? "欧洲" : hasAny(text, [/非洲/]) ? "非洲" : "";
-    const gender = /女性|女生|女孩|女人|女青年/.test(text) ? "女性" : /男性|男生|男孩|男人/.test(text) ? "男性" : /女人|男人/.test(text) ? "" : "";
+    const ageMatch = text.match(/\d{1,2}\s*岁/);
+    const age = /成年/.test(text) && !/成年/.test(existingText) ? "明确成年" :
+      ageMatch && !/\d{1,2}\s*岁/.test(existingText) ? ageMatch[0] :
+      /年轻/.test(text) && !/年轻/.test(existingText) ? "年轻" : "";
+    const identity = /亚洲|东亚/.test(text) && !/亚洲|东亚/.test(existingText) ? "亚洲" :
+      /欧洲/.test(text) && !/欧洲/.test(existingText) ? "欧洲" :
+      /非洲/.test(text) && !/非洲/.test(existingText) ? "非洲" : "";
+    const gender = /女性|女生|女孩|女人|女青年/.test(text) && !/女性|女生|女孩|女人|女青年/.test(existingText) ? "女性" :
+      /男性|男生|男孩|男人/.test(text) && !/男性|男生|男孩|男人/.test(existingText) ? "男性" : "";
     const parts = [age, identity, gender].filter(Boolean);
     return parts.length ? parts.join(" ") + "，" : "";
   }
@@ -216,8 +222,10 @@ function buildPrompt() {
   const lighting = $("lighting").value;
   const detailed = $("detailed").checked;
   const category = getCategory(kind);
-  const scene = detectScene(desc);
-  const subject = detectSubject(desc, category);
+  const headingContext = (raw.match(/^#\s*(.+)$/m) || [])[1] || "";
+  const semanticText = headingContext + " " + desc;
+  const scene = detectScene(semanticText);
+  const subject = detectSubject(semanticText, category, desc);
   const cameraText = CAMERA_TEXT[camera] || "采用自然稳定的观察视角";
   const lightText = LIGHT_TEXT[lighting] || "采用符合场景的光线";
   const lens = getLens(category, scene, desc);
