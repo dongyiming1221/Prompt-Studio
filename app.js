@@ -37,6 +37,14 @@ function extractCoreDescription(raw) {
   for (const name of coreNames) {
     if (sections[name]) return cleanDescription(sections[name]);
   }
+  const firstSection = text.search(/\n\s*【[^】]+】/);
+  if (firstSection >= 0) {
+    const before = text.slice(0, firstSection)
+      .split("\n")
+      .filter(line => !/^\s*#{1,6}\s/.test(line))
+      .join(" ");
+    return cleanDescription(before);
+  }
   if (/^【/.test(text.trim())) return "";
   return cleanDescription(text);
 }
