@@ -1,220 +1,193 @@
+"use strict";
+
 const $ = (id) => document.getElementById(id);
 let currentPrompt = "";
+
 const STORAGE_KEY = "prompt-studio-history-v2";
 
-function toast(message) {
-  const el = $("toast");
-  if (!el) return;
-  el.textContent = message;
-  el.classList.add("show");
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => el.classList.remove("show"), 2100);
-}
-function getHistory() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-  catch { return []; }
-}
-function setHistory(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  const count = $("history-count");
-  if (count) count.textContent = items.length;
-}
-function showTab(name) {
-  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-  ["create", "history", "settings"].forEach(n => {
-    const view = $(n + "-view");
-    if (view) view.classList.toggle("hidden", n !== name);
-  });
-  if (name === "history") renderHistory();
-}
-document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
-$("description").addEventListener("input", e => $("char-count").textContent = \`\${e.target.value.length} 字\`);
-
 const NEGATIVES = {
-  people: ["低质量", "模糊", "失焦", "面部崩坏", "五官错位", "塑料皮肤", "过度磨皮", "身体比例失调", "解剖结构错误", "多余肢体", "多余手指", "手指粘连", "手部畸形", "关节扭曲", "肢体穿插", "服装结构错误", "布料穿模", "人物悬浮", "重复人物", "意外裁切", "过曝", "死黑阴影", "文字", "水印"],
-  group: ["低质量", "人数错误", "人物身份混淆", "重复人物", "肢体融合", "手臂穿插", "手指畸形", "比例失调", "视线混乱", "人物遮挡异常", "面部崩坏", "背景杂乱", "过曝", "水印", "文字"],
-  landscape: ["低质量", "模糊", "地平线倾斜", "透视错误", "重复物体", "自然结构扭曲", "色彩过饱和", "过度HDR", "过度锐化", "人工塑料质感", "不合理天气", "杂乱前景", "文字", "水印"],
-  product: ["低质量", "模糊", "产品变形", "比例错误", "结构缺失", "材质错误", "反射异常", "边缘融化", "悬浮", "透视错误", "杂乱背景", "文字乱码", "水印", "Logo变形"],
-  architecture: ["低质量", "模糊", "建筑结构扭曲", "垂直线倾斜", "透视错误", "重复窗户", "比例失调", "材质错误", "边缘融化", "杂乱环境", "过曝", "水印"],
-  illustration: ["低质量", "线条混乱", "结构崩坏", "比例错误", "五官错位", "肢体畸形", "多余手指", "重复人物", "色彩脏污", "画面杂乱", "文字", "水印"]
+  people: ["低质量", "模糊", "失焦", "面部畸形", "五官错位", "塑料皮肤", "过度磨皮", "身体比例失调", "解剖结构错误", "多余肢体", "多余手指", "手指粘连", "手部畸形", "关节扭曲", "肢体穿插", "服装结构错误", "布料穿模", "人物悬浮", "重复人物", "意外裁切", "过曝", "死黑阴影", "文字", "水印"],
+  group: ["低质量", "模糊", "面部畸形", "人物重复", "肢体穿插", "多余肢体", "手部畸形", "比例失调", "意外裁切", "文字", "水印"],
+  landscape: ["低质量", "模糊", "透视错误", "地貌结构扭曲", "重复纹理", "比例失真", "过曝", "死黑阴影", "文字", "水印"],
+  product: ["低质量", "模糊", "产品变形", "结构错误", "比例失真", "材质错误", "悬浮", "重复物体", "文字", "水印"],
+  architecture: ["低质量", "模糊", "建筑变形", "透视错误", "垂直线倾斜", "门窗重复", "比例失真", "文字", "水印"],
+  illustration: ["低质量", "模糊", "结构崩坏", "比例失调", "色彩脏乱", "元素重复", "文字", "水印"]
 };
 
-const SCENES = [
-  { id: "flower", test: /花海|花田|花园|花丛|鲜花|花束|樱花|玫瑰|郁金香/, label: "花海/花园" },
-  { id: "beach", test: /海边|海滩|沙滩|海岸|海浪|海面|海滨|岸边|礁石/, label: "海岸/海滩" },
-  { id: "pool", test: /泳池|游泳池|池畔|水上平台/, label: "泳池" },
-  { id: "indoor", test: /卧室|客厅|室内|房间|公寓|家里|家中|窗边|厨房|浴室|卫生间|书房/, label: "室内空间" },
-  { id: "cafe", test: /咖啡馆|咖啡厅|餐厅|酒吧|茶馆/, label: "餐饮空间" },
-  { id: "studio", test: /影棚|棚拍|摄影棚|纯色背景|无缝背景|背景纸/, label: "摄影棚" },
-  { id: "night", test: /夜景|夜晚|夜间|霓虹|街灯|城市夜|夜色/, label: "夜间场景" },
-  { id: "street", test: /街道|街头|城市|巷子|马路|天桥|地铁站|商场/, label: "城市街景" },
-  { id: "forest", test: /森林|树林|山林|林间|树下/, label: "森林" },
-  { id: "mountain", test: /山脉|山顶|山间|高山|雪山|山谷/, label: "山地" },
-  { id: "lake", test: /湖泊|湖边|湖畔|湖面|河边|河畔|瀑布/, label: "湖泊/水岸" },
-  { id: "grassland", test: /草地|草原|田野|麦田/, label: "草地/田野" },
-  { id: "office", test: /办公室|会议室|工位|工作室/, label: "办公空间" }
-];
-
-const CAMERA_TEXT = {
-  "自然平视": "相机位于主体视线附近，以接近人眼观察的自然透视呈现画面",
-  "低机位仰拍": "相机低于主体，以克制的仰拍强调主体与环境的关系，避免夸张变形",
-  "高机位俯拍": "相机高于主体，以适度俯拍交代主体与地面/环境的空间关系",
-  "侧面视角": "从主体侧方或侧前方观察，呈现轮廓、动作方向与空间纵深",
-  "主观视角": "采用主体所见的主观视角，前景与主体保持可信的观察距离"
-};
-const LIGHT_TEXT = {
-  "自然光": "采用场景中合理的自然光，光线方向、阴影和环境反射保持一致",
-  "柔和人像光": "使用柔和的人像照明，保留面部与主体的自然明暗过渡",
-  "电影感侧逆光": "以侧逆光勾勒主体轮廓，必要时用弱补光保留暗部细节",
-  "商业棚拍光": "使用可控的棚拍布光，清楚呈现主体形态、边缘和材质",
-  "黄昏暖光": "使用低角度暖色夕阳，形成自然的暖色高光与柔和长阴影",
-  "夜景环境光": "以场景中实际可见的灯光为主要光源，保留夜间暗部层次"
-};
-
-function unique(items) { return [...new Set(items.filter(Boolean))]; }
-function hasAny(text, patterns) { return patterns.some(pattern => pattern.test(text)); }
-
-/* 只抽取用户真正写的创意内容，不把“如何生成”的规则当成画面。 */
-function extractCoreDescription(raw) {
-  const labeled = [
-    /【主题与核心创意】\s*([\s\S]*?)(?=\n【|$)/,
-    /【画面描述】\s*([\s\S]*?)(?=\n【|$)/
-  ];
-  for (const pattern of labeled) {
-    const match = raw.match(pattern);
-    if (match && match[1].trim()) return cleanDescription(match[1]);
-  }
-  const withoutHeadings = raw
-    .replace(/^#{1,6}\s.*$/gm, "")
-    .replace(/【(?:人物外观与主体细节|姿势与肢体控制|场景与环境[^】]*|摄影机位与构图|风格[^】]*|画面质量与一致性|负面提示词|最终画面要求)】[\s\S]*?(?=\n【|$)/g, "")
-    .trim();
-  return cleanDescription(withoutHeadings);
-}
-function cleanDescription(text) {
-  return text
-    .replace(/^\s*(?:生成一张|生成|画一张|绘制一张)\s*/,"")
+function cleanDescription(value) {
+  return String(value || "")
+    .replace(/^\s*(?:生成一张|生成|画一张|绘制一张|请生成|帮我生成)\s*/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }
-function detectScene(text) {
-  return SCENES.find(scene => scene.test.test(text)) || { id: "general", label: "未明确场景" };
+
+function extractCoreDescription(raw) {
+  const text = String(raw || "").replace(/\r/g, "");
+  const corePatterns = [
+    /【主题与核心创意】\s*([\s\S]*?)(?=\n【|$)/,
+    /【核心创意】\s*([\s\S]*?)(?=\n【|$)/,
+    /【画面描述】\s*([\s\S]*?)(?=\n【|$)/
+  ];
+  for (const pattern of corePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1].trim()) return cleanDescription(match[1]);
+  }
+
+  const ignoredHeadings = /【(?:人物外观与主体细节|姿势与肢体控制|场景与环境[^】]*|摄影机位与构图|风格[^】]*|画面质量与一致性|负面提示词|最终画面要求|摄影与构图|细节控制)】/;
+  const lines = text.split("\n");
+  const kept = [];
+  let ignore = false;
+  for (const line of lines) {
+    if (/^#{1,6}\s/.test(line.trim())) continue;
+    if (ignoredHeadings.test(line)) { ignore = true; continue; }
+    if (/^【/.test(line.trim())) { ignore = false; continue; }
+    if (!ignore && line.trim()) kept.push(line.trim());
+  }
+  return cleanDescription(kept.join(" "));
 }
+
 function getCategory(kind) {
-  if (kind === "情侣/多人写真") return "group";
-  if (kind === "人物写真") return "people";
-  if (kind === "风景摄影") return "landscape";
-  if (kind === "产品摄影") return "product";
-  if (kind === "建筑摄影") return "architecture";
-  return "illustration";
+  if (/多人|情侣/.test(kind)) return "group";
+  if (/风景/.test(kind)) return "landscape";
+  if (/产品/.test(kind)) return "product";
+  if (/建筑/.test(kind)) return "architecture";
+  if (/动漫|插画/.test(kind)) return "illustration";
+  return "people";
 }
-function detectSubject(text, category, existingText = text) {
-  if (category === "people") {
-    const ageMatch = text.match(/\d{1,2}\s*岁/);
-    const age = /成年/.test(text) && !/成年/.test(existingText) ? "明确成年" :
-      ageMatch && !/\d{1,2}\s*岁/.test(existingText) ? ageMatch[0] :
-      /年轻/.test(text) && !/年轻/.test(existingText) ? "年轻" : "";
-    const identity = /亚洲|东亚/.test(text) && !/亚洲|东亚/.test(existingText) ? "亚洲" :
-      /欧洲/.test(text) && !/欧洲/.test(existingText) ? "欧洲" :
-      /非洲/.test(text) && !/非洲/.test(existingText) ? "非洲" : "";
-    const gender = /女性|女生|女孩|女人|女青年/.test(text) && !/女性|女生|女孩|女人|女青年/.test(existingText) ? "女性" :
-      /男性|男生|男孩|男人/.test(text) && !/男性|男生|男孩|男人/.test(existingText) ? "男性" : "";
-    const parts = [age, identity, gender].filter(Boolean);
-    return parts.length ? parts.join(" ") + "，" : "";
-  }
-  return "";
+
+function detectScene(text) {
+  const rules = [
+    ["flower", /花海|花田|花园|花丛|花束|花店/],
+    ["beach", /海边|海滩|沙滩|海岸|海浪|海面/],
+    ["pool", /泳池|游泳池|池边|水上乐园/],
+    ["cafe", /咖啡馆|咖啡厅|茶馆|餐厅|餐桌/],
+    ["office", /办公室|办公桌|会议室/],
+    ["studio", /摄影棚|影棚|纯色背景|棚拍/],
+    ["indoor", /室内|卧室|客厅|家中|房间|窗边/],
+    ["night", /夜景|夜晚|夜色|霓虹|夜间/],
+    ["street", /街道|街头|马路|巷子|城市街景/],
+    ["forest", /森林|树林|林间|树丛/],
+    ["mountain", /山间|山顶|山脉|高山|山谷/],
+    ["lake", /湖边|湖泊|河边|河岸|溪流/],
+    ["grassland", /草原|草地|田野|麦田/]
+  ];
+  for (const [id, pattern] of rules) if (pattern.test(text)) return id;
+  return "general";
 }
+
 function sceneDescription(scene, category, text) {
-  const person = category === "people" || category === "group";
-  const breeze = /微风|海风|风吹|风中/.test(text);
+  const breeze = /微风|有风|海风|风吹/.test(text);
   const sunshine = /阳光|晴天|日光|明媚|夕阳|黄昏/.test(text);
-  const parts = [];
-  switch (scene.id) {
-    case "flower":
-      parts.push("花朵在画面近处、中景与远处形成有疏密变化的层次，花田尺度自然，远景与天空或地平线衔接");
-      if (breeze) parts.push("微风只带动少量花枝、发丝或衣物，动态方向统一，不遮挡主体");
-      if (sunshine) parts.push("阳光在花瓣与叶片边缘形成自然高光，阴影保留细节");
-      break;
-    case "beach":
-      parts.push("画面交代沙滩、潮线、海面与远处海平线的前后关系，浪花尺度自然，湿沙与水面反光符合光线方向");
-      if (breeze) parts.push("海风轻微带动发丝、衣物或岸边植被，避免夸张飞扬");
-      if (sunshine) parts.push("日光在海面形成有方向的细碎反光，沙滩亮部不过曝");
-      break;
-    case "pool":
-      parts.push("呈现池沿、池水与周围空间的清晰关系，水面反射和折射自然，人物或主体与池边保持真实接触");
-      break;
-    case "indoor":
-      parts.push("通过墙面、门窗、家具和地面交代室内布局，近景与背景有真实距离，物件尺度合理且稳定落地");
-      if (/窗|窗边|阳光|日光/.test(text)) parts.push("窗外自然光从明确方向进入室内，在人物和家具上形成柔和明暗变化");
-      break;
-    case "cafe":
-      parts.push("以桌椅、吧台、餐具和室内外光线建立空间层次，背景陈设适量，不喧宾夺主");
-      break;
-    case "studio":
-      parts.push("背景保持干净，主体与背景留有适当距离，光线和投影方向统一");
-      break;
-    case "night":
-      parts.push("以画面中可见的路灯、窗光或霓虹等实际光源建立夜间照明，暗部保留层次");
-      break;
-    case "street":
-      parts.push("利用道路、建筑立面与街道纵深建立透视关系，背景人物和车辆不过度抢占主体");
-      break;
-    case "forest":
-      parts.push("树木、地面植被与远处林木形成自然纵深，枝叶疏密真实，避免重复纹理");
-      break;
-    case "mountain":
-      parts.push("通过近处地形、中景山体和远处山脊表现尺度，远山具有自然空气透视");
-      break;
-    case "lake":
-      parts.push("水岸、湖面或河面与周围地形形成连续空间，水面反射与岸边接触关系可信");
-      break;
-    case "grassland":
-      parts.push("草地或田野由近及远自然延伸，植被高度和密度有变化，远景不过度重复");
-      break;
-    case "office":
-      parts.push("桌面、座椅、设备与墙面构成清晰的办公空间，物件比例可信，布局有秩序");
-      break;
-    default:
-      if (person) parts.push("环境只补充与主体有关的空间信息，明确近处、中景和远处的关系，不凭空添加具体道具或地点");
-      else parts.push("环境元素保持真实尺度与空间关系，主体突出，背景不添加无关内容");
+  const person = category === "people" || category === "group";
+  const map = {
+    flower: "近处少量花朵形成自然前景，中景花丛疏密错落，远处花田向地平线延伸；花朵大小与主体比例真实，花色自然变化。",
+    beach: "画面呈现沙滩、潮线、海面与远处海平线的空间层次，湿沙与水面反光自然，浪花尺度符合真实海岸环境。",
+    pool: "清楚呈现池沿、池水和周围露台的空间关系，水面反射与折射自然，主体与池边接触可信。",
+    indoor: "通过墙面、门窗、地面和实际存在的家具交代室内布局，前后景距离明确，物件尺度合理并稳定落地。",
+    cafe: "桌椅、吧台与实际存在的餐具构成有层次的咖啡馆空间，背景陈设适量，不遮挡主体。",
+    office: "办公桌、座椅、设备和墙面构成清晰的办公空间，物件比例可信，布局有序。",
+    studio: "背景简洁，主体与背景保持适当距离，阴影方向与主光方向一致。",
+    night: "利用画面中实际可见的路灯、窗光或招牌光源建立夜间照明，暗部保留层次。",
+    street: "道路、建筑立面与街道纵深形成自然透视，背景元素保持合理尺度，不抢夺主体注意力。",
+    forest: "近处植被、中景树木和远处林木形成自然纵深，枝叶疏密真实，避免重复纹理。",
+    mountain: "近处地形、中景山体和远处山脊形成尺度层次，远山呈现自然空气透视。",
+    lake: "水岸、湖面与周围地形形成连续空间，水面反射和岸边接触关系可信。",
+    grassland: "草地或田野由近及远自然延伸，植被高度与密度有变化，远景不过度重复。",
+    general: person ? "环境只补充与主体相关的空间信息，不凭空增加具体地点或道具。" : "主体与环境保持真实尺度、透视和空间关系。"
+  };
+  const parts = [map[scene] || map.general];
+  if (breeze && ["flower", "beach", "grassland", "forest"].includes(scene)) {
+    parts.push("微风只带动少量发丝、花枝或衣物，动态轻微且方向一致，不遮挡主体。");
   }
-  return parts.join("。") + (parts.length ? "。" : "");
+  if (sunshine && ["flower", "beach", "grassland", "lake"].includes(scene)) {
+    parts.push("自然日光在实际物体边缘形成柔和高光，阴影保留细节，亮部不过曝。");
+  }
+  return parts.join("");
 }
-function getLens(category, scene, text) {
-  if (category === "product") return "约 70–100mm 等效焦段，突出产品形态并控制透视";
-  if (category === "architecture") return "约 24–35mm 等效焦段，保持建筑垂直线与透视关系自然";
-  if (category === "landscape") return "约 24–35mm 等效焦段，呈现环境纵深与空间尺度";
-  if (category === "group") return "约 35–50mm 等效焦段，兼顾人物关系与环境";
-  if (category === "illustration") return "透视与景深服从画面风格，不强行套用摄影焦段";
-  if (scene.id === "indoor" || scene.id === "cafe") return "约 35–50mm 等效焦段，兼顾人物与室内环境";
-  if (scene.id === "beach" || scene.id === "flower") return "约 50mm 等效焦段，保留人物比例并交代适量环境";
-  return "约 50mm 等效焦段，保持自然的人物透视";
-}
+
 function getPoseDescription(text) {
   const cues = [];
-  if (hasAny(text, [/站立|站在|站着/])) cues.push("人物保持自然站姿，重心由双脚稳定承托");
-  if (hasAny(text, [/坐在|坐着|坐于/])) cues.push("人物以自然坐姿呈现，身体与座面接触关系可信");
-  if (hasAny(text, [/行走|走在|漫步/])) cues.push("人物处于自然行走状态，步幅与身体重心协调");
-  if (hasAny(text, [/奔跑|跑向/])) cues.push("动作呈现自然运动状态，四肢摆动与身体重心协调");
-  if (hasAny(text, [/双手扶|双手拿|双手举|双手捧/])) cues.push("双手动作清晰可辨，手指与所接触物体的位置关系准确");
-  if (hasAny(text, [/回头|侧身|转身/])) cues.push("身体转向与头部视线方向协调");
-  if (hasAny(text, [/闭眼|闭着眼/])) cues.push("双眼自然闭合");
-  if (hasAny(text, [/看向镜头|望向镜头/])) cues.push("视线自然落在镜头方向");
-  if (hasAny(text, [/微笑|微微笑|笑容/])) cues.push("面部表情自然放松");
-  return cues.join("；");
+  const checks = [
+    [/双手扶着帽檐|双手轻轻扶住帽檐|扶着帽檐/, "双手分别扶住草帽两侧帽檐，手指自然弯曲，手腕与手臂姿态协调"],
+    [/单手扶着帽檐|一只手扶着帽檐/, "一只手轻扶帽檐，另一只手保持自然放松"],
+    [/闭着眼睛|双眼闭合|闭眼/, "双眼自然闭合"],
+    [/微微抬头|微抬头|抬起下巴/, "下巴微微抬起"],
+    [/面带微笑|微笑|笑容/, "面部呈现自然放松的微笑"],
+    [/看向镜头|看镜头|注视镜头/, "视线自然看向镜头"],
+    [/回头|回眸/, "身体保持自然朝向，头部轻轻转向身后"],
+    [/坐在|坐着/, "保持自然坐姿，身体重心由座面稳定支撑"],
+    [/行走|走在|漫步/, "处于自然行走过程中，步幅舒展，身体重心稳定"],
+    [/奔跑|跑步/, "处于自然奔跑动作中，四肢运动协调"]
+  ];
+  for (const [pattern, phrase] of checks) if (pattern.test(text)) cues.push(phrase);
+  return cues.length ? cues.join("，") + "。" : "";
 }
-function getPersonDescription(text, scene) {
-  const cues = [];
-  if (/草帽|遮阳帽|帽檐/.test(text)) cues.push("保留用户指定的帽子及其佩戴方式");
-  if (/长发|短发|马尾|卷发|直发|盘发/.test(text)) cues.push("保留用户指定的发型");
-  if (/连衣裙|裙子|裙装|衬衫|T恤|外套|泳装|泳衣|西装|牛仔裤/.test(text)) cues.push("服装款式以用户明确描述为准，呈现真实版型、面料与褶皱");
-  if (/眼镜|耳环|项链|发夹|头饰/.test(text)) cues.push("保留用户指定的配饰");
-  if (!cues.length) return "";
-  return cues.join("；") + "。";
+
+function getPersonDescription(text) {
+  const parts = [];
+  if (/草帽|遮阳帽/.test(text)) parts.push("头戴一顶自然编织质感的遮阳草帽");
+  if (/长发/.test(text)) parts.push("留有自然垂落的长发");
+  else if (/短发/.test(text)) parts.push("留有利落的短发");
+  if (/马尾/.test(text)) parts.push("头发扎成马尾");
+  if (/卷发/.test(text)) parts.push("发丝呈自然卷曲");
+  else if (/直发/.test(text)) parts.push("发丝自然顺直");
+  if (/眼镜/.test(text)) parts.push("佩戴与原描述一致的眼镜");
+  if (/耳环/.test(text)) parts.push("佩戴耳环");
+  if (/项链/.test(text)) parts.push("佩戴项链");
+  if (/连衣裙|裙子|裙装/.test(text)) parts.push("穿着原描述指定的裙装，呈现真实版型与面料褶皱");
+  if (/衬衫/.test(text)) parts.push("穿着原描述指定的衬衫");
+  if (/T恤/.test(text)) parts.push("穿着原描述指定的T恤");
+  if (/泳装|泳衣/.test(text)) parts.push("穿着原描述指定的泳装");
+  if (/西装/.test(text)) parts.push("穿着原描述指定的西装");
+  if (/牛仔裤/.test(text)) parts.push("穿着原描述指定的牛仔裤");
+  return parts.length ? parts.join("，") + "。" : "";
 }
+
+function getLens(category, scene, text) {
+  if (category === "landscape") return "24–35mm 等效广角焦段，展现环境纵深";
+  if (category === "product") return "50–85mm 等效焦段，准确呈现产品比例与细节";
+  if (category === "architecture") return "24–35mm 等效焦段，控制建筑透视";
+  if (category === "group") return "35–50mm 等效焦段，兼顾人物关系与环境";
+  if (scene === "flower" || scene === "beach") return "50mm 等效焦段，兼顾人物与环境层次";
+  return "50–85mm 等效焦段，保持自然人物透视";
+}
+
+function getCameraText(value) {
+  const map = {
+    "自然平视": "相机位于接近人物视线的高度，以自然平视角度拍摄",
+    "低机位仰拍": "相机位置低于主体视线，适度向上仰拍，透视自然不过度夸张",
+    "高机位俯拍": "相机位于主体上方，向下俯拍，保持空间关系自然",
+    "侧面视角": "从主体侧方拍摄，呈现清晰的侧向轮廓与空间层次",
+    "主观视角": "采用接近观察者视线的主观视角，前景关系自然"
+  };
+  return map[value] || map["自然平视"];
+}
+
+function getLightText(value) {
+  const map = {
+    "自然光": "使用符合场景的自然光，保留真实环境反射光与柔和阴影",
+    "柔和人像光": "采用柔和均匀的人像光，面部曝光自然，阴影过渡细腻",
+    "电影感侧逆光": "采用有方向的侧逆光，在主体轮廓形成适度边缘高光，同时保留面部细节",
+    "商业棚拍光": "使用均匀可控的棚拍布光，主体受光清晰，阴影干净",
+    "黄昏暖光": "使用低角度暖色夕照，形成柔和长阴影与自然暖色高光",
+    "夜景环境光": "以场景中可见的灯光作为主要光源，保留夜间明暗层次"
+  };
+  return map[value] || map["自然光"];
+}
+
+function unique(items) {
+  return [...new Set(items.filter(Boolean))];
+}
+
 function buildPrompt() {
   const raw = $("description").value.trim();
-  if (!raw) { toast("先描述你想生成的画面"); $("description").focus(); return; }
-  const desc = extractCoreDescription(raw) || raw;
+  if (!raw) {
+    toast("先描述你想生成的画面");
+    $("description").focus();
+    return;
+  }
+
+  const desc = extractCoreDescription(raw) || cleanDescription(raw);
   const kind = $("kind").value;
   const style = $("style").value;
   const ratio = $("ratio").value;
@@ -222,76 +195,162 @@ function buildPrompt() {
   const lighting = $("lighting").value;
   const detailed = $("detailed").checked;
   const category = getCategory(kind);
-  const headingContext = (raw.match(/^#\s*(.+)$/m) || [])[1] || "";
-  const semanticText = headingContext + " " + desc;
-  const scene = detectScene(semanticText);
-  const subject = detectSubject(semanticText, category, desc);
-  const cameraText = CAMERA_TEXT[camera] || "采用自然稳定的观察视角";
-  const lightText = LIGHT_TEXT[lighting] || "采用符合场景的光线";
-  const lens = getLens(category, scene, desc);
+  const scene = detectScene(desc);
 
-  let visual = desc;
+  const title = desc.split(/[，。；,.;]/)[0].slice(0, 28) || kind;
+  const visualParts = [desc];
+
   if (category === "people") {
-    const additions = [getPersonDescription(desc, scene), getPoseDescription(desc), sceneDescription(scene, category, desc)].filter(Boolean);
-    visual = [subject + desc, ...additions].filter(Boolean).join("。");
+    const person = getPersonDescription(desc);
+    const pose = getPoseDescription(desc);
+    if (person && !person.split(/[，。]/).some(part => desc.includes(part))) visualParts.push(person);
+    if (pose) visualParts.push(pose);
+    if (scene !== "general") visualParts.push(sceneDescription(scene, category, desc));
+    visualParts.push("人物面部、手部与身体比例自然，动作符合人体结构，身体与环境接触可信。");
   } else if (category === "group") {
-    visual = desc + "。人物之间的距离、互动方向和遮挡关系清楚，每个人物的动作与身体结构自然，不出现肢体穿插。" + sceneDescription(scene, category, desc);
+    visualParts.push("人物之间的距离、互动方向和遮挡关系清楚，每个人物的动作与身体结构自然。");
+    if (scene !== "general") visualParts.push(sceneDescription(scene, category, desc));
   } else if (category === "landscape") {
-    visual = desc + "。画面以近景、中景和远景建立纵深，地貌、水体、植被与天空保持真实尺度。" + sceneDescription(scene, category, desc);
+    visualParts.push("以前景、中景和远景建立纵深，地貌、水体、植被与天空保持真实尺度。");
+    if (scene !== "general") visualParts.push(sceneDescription(scene, category, desc));
   } else if (category === "product") {
-    visual = desc + "。完整呈现产品轮廓、关键结构和真实比例，材质纹理、反射与接触阴影符合实际物理表现，背景简洁且不干扰主体。";
+    visualParts.push("完整呈现产品轮廓、关键结构和真实比例，材质纹理、反射与接触阴影符合实际物理表现。");
   } else if (category === "architecture") {
-    visual = desc + "。准确呈现建筑体量、立面节奏、门窗比例和表面材质，保持垂直线稳定、透视关系正确，并通过周边环境体现建筑尺度。";
+    visualParts.push("准确呈现建筑体量、立面节奏、门窗比例和表面材质，保持垂直线稳定、透视关系正确。");
   } else {
-    visual = desc + "。保留主体的核心设计，明确轮廓、动作、色彩关系与空间层次，整体视觉风格统一，结构清晰。";
+    visualParts.push("保留主体核心设计，明确轮廓、动作、色彩关系与空间层次，整体视觉风格统一。");
   }
 
-  const negatives = [...NEGATIVES[category]];
-  if (scene.id === "beach") negatives.push("海平面倾斜", "水面与沙滩边界错误", "浪花机械重复");
-  if (scene.id === "flower") negatives.push("花朵机械重复", "花枝穿过主体", "花瓣粘连", "花海遮挡主体");
-  if (scene.id === "indoor" || scene.id === "cafe" || scene.id === "office") negatives.push("家具结构扭曲", "门窗透视错误", "物体悬浮", "室内空间比例错误");
-  if (scene.id === "night") negatives.push("无来源强光", "夜景过度提亮", "灯光方向混乱");
-  if (scene.id === "pool" || scene.id === "lake") negatives.push("水面反射错误", "水体边界扭曲");
-  if (category === "architecture") negatives.push("重复门窗", "立面节奏混乱", "建筑垂直线倾斜");
-  if (category === "people" && /泳装|泳衣/.test(desc)) negatives.push("泳装结构错误", "不自然的身体比例");
-  const quality = detailed
-    ? "细节清晰但不过度锐化；人物、物体与环境的比例、透视、接触阴影和光照方向保持一致。材质表现符合画面中实际存在的对象，不添加无关材质描述。"
-    : "主体清晰，结构与透视自然，画面元素协调。";
   const composition = [
     ratio + " 画幅",
-    cameraText,
-    lens,
+    getCameraText(camera),
+    getLens(category, scene, desc),
     style,
-    lightText,
-    detailed ? "主体与背景保持清楚的空间层次，构图留白与主体占比服从原始创意" : "主体突出，构图稳定"
+    getLightText(lighting),
+    detailed ? "主体位置、景别、留白与背景占比协调，空间层次清楚" : "主体突出，构图稳定"
   ].join("；") + "。";
 
-  const title = desc.split(/[，。；,.;]/)[0].slice(0, 26) || kind;
+  const negatives = [...(NEGATIVES[category] || NEGATIVES.people)];
+  if (scene === "flower") negatives.push("花朵机械重复", "花枝穿过主体", "花瓣粘连", "花海遮挡面部");
+  if (scene === "beach") negatives.push("海平面倾斜", "水面与沙滩边界错误", "浪花机械重复");
+  if (["indoor", "cafe", "office"].includes(scene)) negatives.push("家具结构扭曲", "门窗透视错误", "物体悬浮", "室内比例错误");
+  if (scene === "night") negatives.push("无来源强光", "夜景过度提亮", "灯光方向混乱");
+  if (["pool", "lake"].includes(scene)) negatives.push("水面反射错误", "水体边界扭曲");
+
   const sections = [
     "# " + title + " · " + kind,
-    "【画面描述】\n" + visual,
-    "【摄影与构图】\n" + composition,
-    detailed ? "【细节控制】\n" + quality : "",
-    "【负面提示词】\n" + unique(negatives).join("，") + "。"
-  ].filter(Boolean);
+    "【画面描述】\n" + unique(visualParts).join(""),
+    "【摄影与构图】\n" + composition
+  ];
+  if (detailed) {
+    sections.push("【细节控制】\n材质表现符合画面中实际存在的对象；细节清晰但不过度锐化，透视、接触阴影与光照方向保持一致。");
+  }
+  sections.push("【负面提示词】\n" + unique(negatives).join("，") + "。");
+
   currentPrompt = sections.join("\n\n");
-  if ($("language").value === "英文") currentPrompt = toEnglishPrompt(currentPrompt);
+  if ($("language").value === "英文") {
+    currentPrompt = "[English structure; original scene description is preserved]\n\n" + currentPrompt;
+  }
   $("result").textContent = currentPrompt;
   $("result-panel").classList.remove("hidden");
   $("result-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
-function toEnglishPrompt(prompt) {
-  const labels = {
-    "【画面描述】": "[VISUAL DESCRIPTION]",
-    "【摄影与构图】": "[PHOTOGRAPHY AND COMPOSITION]",
-    "【细节控制】": "[DETAIL CONTROL]",
-    "【负面提示词】": "[NEGATIVE PROMPT]"
-  };
-  let output = prompt;
-  for (const [zh, en] of Object.entries(labels)) output = output.replaceAll(zh, en);
-  return "[OFFLINE ENGLISH-LABEL MODE — the prompt body remains in its original language; full translation is not available]\n\n" + output;
+
+function toast(message) {
+  const node = $("toast");
+  if (!node) return;
+  node.textContent = message;
+  node.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => node.classList.remove("show"), 2200);
 }
 
+function getHistory() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function setHistory(items) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  updateHistoryCount();
+}
+
+function updateHistoryCount() {
+  const count = $("history-count");
+  if (count) count.textContent = String(getHistory().length);
+}
+
+function renderHistory() {
+  const host = $("history-list");
+  if (!host) return;
+  host.innerHTML = "";
+  const items = getHistory();
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "还没有保存过提示词。";
+    host.append(empty);
+    updateHistoryCount();
+    return;
+  }
+  items.forEach(item => {
+    const card = document.createElement("article");
+    card.className = "history-card";
+    const time = document.createElement("time");
+    time.textContent = item.time || "";
+    const p = document.createElement("p");
+    p.textContent = item.prompt;
+    const copy = document.createElement("button");
+    copy.className = "button secondary";
+    copy.textContent = "复制";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(item.prompt); toast("已复制"); }
+      catch (_) { toast("复制失败，请手动选择文本"); }
+    };
+    const load = document.createElement("button");
+    load.className = "button secondary";
+    load.textContent = "载入";
+    load.onclick = () => {
+      currentPrompt = item.prompt;
+      $("result").textContent = item.prompt;
+      $("result-panel").classList.remove("hidden");
+      showTab("create");
+      $("result-panel").scrollIntoView({ behavior: "smooth" });
+    };
+    const del = document.createElement("button");
+    del.className = "button secondary";
+    del.textContent = "删除";
+    del.onclick = () => {
+      setHistory(getHistory().filter(x => x.id !== item.id));
+      renderHistory();
+    };
+    card.append(time, p, copy, load, del);
+    host.append(card);
+  });
+  updateHistoryCount();
+}
+
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+  });
+  document.querySelectorAll(".view").forEach(view => view.classList.add("hidden"));
+  const target = $(name + "-view");
+  if (target) target.classList.remove("hidden");
+  if (name === "history") renderHistory();
+}
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => showTab(tab.dataset.tab));
+});
+
+$("description").addEventListener("input", event => {
+  $("char-count").textContent = event.target.value.length + " 字";
+});
 $("generate").addEventListener("click", buildPrompt);
 $("regenerate").addEventListener("click", buildPrompt);
 $("clear").addEventListener("click", () => {
@@ -301,58 +360,62 @@ $("clear").addEventListener("click", () => {
   $("description").focus();
 });
 $("copy").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(currentPrompt); toast("已复制完整提示词"); }
-  catch { toast("复制失败，请手动选择文本"); }
+  if (!currentPrompt) return;
+  try {
+    await navigator.clipboard.writeText(currentPrompt);
+    toast("完整提示词已复制");
+  } catch (_) {
+    toast("复制失败，请手动选择文本");
+  }
 });
 $("save").addEventListener("click", () => {
   if (!currentPrompt) return;
   const items = getHistory();
-  items.unshift({ id: Date.now(), date: new Date().toLocaleString("zh-CN"), prompt: currentPrompt });
-  setHistory(items.slice(0, 50));
+  items.unshift({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    time: new Date().toLocaleString(),
+    prompt: currentPrompt
+  });
+  setHistory(items.slice(0, 100));
   toast("已保存到历史记录");
 });
-function renderHistory() {
-  const items = getHistory();
-  setHistory(items);
-  const host = $("history-list");
-  host.innerHTML = "";
-  if (!items.length) {
-    host.innerHTML = '<div class="panel muted">还没有保存的提示词。生成并点击“保存到历史”后会显示在这里。</div>';
-    return;
+$("clear-history").addEventListener("click", () => {
+  if (confirm("确定清空所有本地历史记录吗？")) {
+    setHistory([]);
+    renderHistory();
   }
-  items.forEach(item => {
-    const card = document.createElement("article");
-    card.className = "history-card";
-    const time = document.createElement("time");
-    time.textContent = item.date;
-    const p = document.createElement("p");
-    p.textContent = item.prompt;
-    const copy = document.createElement("button");
-    copy.className = "button secondary";
-    copy.textContent = "复制";
-    copy.onclick = async () => { try { await navigator.clipboard.writeText(item.prompt); toast("已复制"); } catch { toast("复制失败"); } };
-    const load = document.createElement("button");
-    load.className = "button secondary";
-    load.textContent = "载入编辑";
-    load.onclick = () => {
-      $("result").textContent = item.prompt;
-      currentPrompt = item.prompt;
-      $("result-panel").classList.remove("hidden");
-      showTab("create");
-      $("result-panel").scrollIntoView({ behavior: "smooth" });
-    };
-    const del = document.createElement("button");
-    del.className = "button secondary";
-    del.textContent = "删除";
-    del.onclick = () => { setHistory(getHistory().filter(x => x.id !== item.id)); renderHistory(); };
-    card.append(time, p, copy, load, del);
-    host.append(card);
+});
+
+function setupEngineMode() {
+  const notice = document.querySelector(".editor-panel .notice");
+  if (!notice || document.getElementById("engine-mode")) return;
+  const wrapper = document.createElement("label");
+  wrapper.style.cssText = "display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:600";
+  wrapper.textContent = "生成引擎";
+  const select = document.createElement("select");
+  select.id = "engine-mode";
+  select.style.cssText = "height:36px;border:1px solid #e8e7e0;border-radius:8px;padding:0 10px;background:white;font:inherit";
+  const local = document.createElement("option");
+  local.value = "local";
+  local.textContent = "免费离线模式（可用）";
+  const ai = document.createElement("option");
+  ai.value = "ai";
+  ai.textContent = "AI 增强模式（后续接入）";
+  ai.disabled = true;
+  select.append(local, ai);
+  wrapper.append(select);
+  notice.parentNode.insertBefore(wrapper, notice);
+  select.addEventListener("change", () => {
+    if (select.value === "ai") {
+      select.value = "local";
+      toast("AI 增强接口尚未接入，当前使用免费离线模式");
+    }
   });
 }
-$("clear-history").addEventListener("click", () => {
-  if (confirm("确定清空所有本地历史记录吗？")) { setHistory([]); renderHistory(); }
-});
+
+setupEngineMode();
 setHistory(getHistory());
+
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
